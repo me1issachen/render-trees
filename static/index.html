@@ -1,0 +1,541 @@
+<html><body>
+    <head>
+        <meta charset="UTF-8">
+        <title>INFO 5311 Homework 1</title>
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="https://d3js.org/topojson.v3.min.js"></script>
+
+        <style>
+  
+            .gridlines line {
+              stroke: #bbb;
+            }
+            
+            .gridlines .domain {
+              stroke: none;
+            }
+
+            #balloon{
+                display:inline-block;
+            }
+
+            body{
+                font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+            }
+          
+        </style>
+    </head>
+    <h3> Melissa Chen mmc324 </h3>
+    <div style="display:flex;justify-content:space-around;">
+        <div>
+            <h4>Map of Caretakers and Tree Diameter </h4>
+            <p style="font-size:15px">This map shows the locations of trees, colored by the caretaker of the tree. </br>
+                The radius of a point increase as diameter at breast height increases.
+            </p>
+        </div>
+        <div>
+            <h4>Map of Caretakers (without Private and DPW) and Tree Diameter</h4>
+                <p style="font-size:15px">This map shows the locations of trees, colored by the caretaker of the tree. </br>
+                    The radius of a point increase as diameter at breast height increases. </br>
+                    Since caretakers "Private" and "DPW" are related to the majority of the trees, </br>
+                    they are removed from this map to see less common caretakers.
+                </p>
+        </div>
+    </div>
+    <div style="display:flex;">
+        <svg id = "chloropleth" height = "700" width = "590" style = "margin:20px">
+        </svg>
+        <svg id = "chloro-reduced" height = "700" width = "590" style = "margin:20px" >
+        </svg>
+    </div>
+
+    <div style="display:flex;justify-content:space-around;">
+        <div>
+            <h4>Map of Private Caretakers and Tree Diameter</h4>
+            <p style="font-size:15px">This map shows the locations of trees of only Private caretakers, </br>
+                who have the most amount of trees. </br>
+                The radius of a point increase as diameter at breast height increases.</br>
+            </p>
+        </div>
+        <div>
+            <h4>Map of DPW Caretakers and Tree Diameter</h4>
+                <p style="font-size:15px">This map shows the locations of trees of only DPW caretakers,</br>
+                    who have the second most amount of trees.</br>
+                    The radius of a point increase as diameter at breast height increases.</br>
+                    
+                </p>
+        </div>
+    </div>
+    <div style="display: flex;">
+        <svg id = "chloro-private" height = "700" width = "590" style = "margin:20px" >
+        </svg>
+
+        <svg id = "chloro-dpw" height = "700" width = "590" style = "margin:20px" >
+        </svg>
+    </div>
+
+    <h4>Diameter by Most Popular caretakers and Most Popular Species</h4>
+    <p>
+        This plot shows the diameter of trees in relation to the top 5 caretakers and top 10 species.</br>
+        As radius increases and color transitions from lighter to darker shades, diameter increases.
+    </p>
+
+    <svg id = "balloon" width="810" height="500" style = "margin:20px"></svg>
+
+    <script>
+        const svg = d3.select("#chloropleth");
+        const width = svg.attr("width");
+        const height = svg.attr("height");
+        const margin = {top: 20, right: 20, bottom:20, left:20}
+        const mapWidth = width - margin.left - margin.right;
+        const mapHeight = height - margin.top - margin.bottom;
+        const map = svg.append("g")
+                .attr("transform","translate("+margin.left+","+margin.top+")");
+
+        const svg2 = d3.select("#chloro-reduced")
+        const width2 = svg2.attr("width");
+        const height2 = svg2.attr("height");
+        const margin2 = {top: 20, right: 20, bottom:20, left:20}
+        const mapWidth2 = width2 - margin2.left - margin2.right;
+        const mapHeight2 = height2 - margin2.top - margin2.bottom;
+        const map2 = svg2.append("g")
+                        .attr("transform","translate("+margin.left+","+margin.top+")");
+
+        const svgPrivate = d3.select("#chloro-private")
+        const mapPrivate= svgPrivate.append("g")
+                        .attr("transform","translate("+margin.left+","+margin.top+")");
+
+        
+        const svgDpw = d3.select("#chloro-dpw")
+        const mapDpw = svgDpw.append("g")
+                        .attr("transform","translate("+margin.left+","+margin.top+")");
+
+
+        const svgBalloon = d3.select("#balloon");
+        const w = svgBalloon.attr("width");
+        const h = svgBalloon.attr("height");
+        const margins = {top: 20, right: 20, bottom:120, left:70}
+        const chartWidth = w - margins.left - margins.right;
+        const chartHeight = h - margins.top - margins.bottom;
+        const chartArea = svgBalloon.append("g")
+                .attr("transform","translate("+margins.left+","+margins.top+")");
+
+
+        const requestData = async() => {
+            var data = await d3.csv('Street_Tree_List-2022-01-30_FILTERED.csv')
+            console.log(data)
+            // console.log(data['TreeID']);
+
+            //getting unique list of caretakers
+            let result = [];
+            let start=false;
+            data.forEach((d,i)=>{
+                if (result.includes(d['qCaretaker'])){
+                    start = true;
+                }
+                else{
+                    result.push(d["qCaretaker"])
+                }
+                start = false
+            })
+            console.log(result);
+
+            //creating dictionary of counts for caretakers
+            let careDict = {};
+            for (let i=0; i<result.length; i++){
+                careDict[result[i]]=0;
+            }
+            console.log(careDict)
+            data.forEach((d,i)=>{
+                careDict[d['qCaretaker']] ++;
+            });
+            console.log(careDict);
+
+            //fixing data quality issues
+            data.forEach((d,i)=>{
+                d['DBH'] = Number(d['DBH'])
+                d['Latitude'] = Number(d['Latitude'])
+                d['Longitude'] = Number(d['Longitude'])
+            })
+
+            //creating other datasets
+            reduceData = data.filter((d)=> {
+                    return d['qCaretaker'] != 'Private' && d['qCaretaker'] != 'DPW'
+                });
+
+            console.log("reduceData")
+            console.log(reduceData)
+
+            let reduced = [];
+            reduceData.forEach((d,i)=>{
+                if (reduced.includes(d['qCaretaker'])){
+                    start = true;
+                }
+                else{
+                    reduced.push(d["qCaretaker"])
+                }
+                start = false
+            })
+            console.log("hi")
+            console.log(reduced);
+
+            console.log("private")
+            privateData = data.filter((d)=> {
+                    return d['qCaretaker'] === 'Private' 
+                });
+
+            console.log(privateData)
+
+            dpwData = data.filter((d)=>{
+                return d['qCaretaker'] === 'DPW'
+            })
+            console.log("dpw")
+            console.log(dpwData)
+
+            const sftrees = await d3.json("SF-Neighborhoods.geo.json");
+            console.log(sftrees)
+
+            function drawMap(chart, ww, hh, dataset, names, color = null){
+            
+                var zips = topojson.feature(sftrees, sftrees.objects.SFNeighborhoods)
+                var zipsMesh = topojson.mesh(sftrees, sftrees.objects.SFNeighborhoods)
+                var projection = d3.geoMercator().fitSize([ww, hh], zips)
+                var path = d3.geoPath().projection(projection); 
+                const mapData = sftrees.objects.SFNeighborhoods.geometries;
+
+                let viewport = chart.append("g");
+                viewport.selectAll("path.zip").data(zips.features)
+                        .join("path")
+                        .attr("class", "zip")
+                        .attr("d", path)
+                        .style("fill", "none")
+
+                let countyMesh = viewport.append("path").datum(zipsMesh)
+                            .attr("class", "outline")
+                            .attr("d", path)
+                            .style("stroke", "black")
+                            .style("fill", "none")
+                            .style("stroke-width", '1px');
+
+                
+
+                let caretakers= names;
+
+                //d3.schemeCategory20 with order slightly changed
+                const categorical = [
+                    "#66c2a5", "#fc8d62", "#ff7f0e","#aec7e8", "#2ca02c",
+                    "#98df8a", "#d62728", "#ff9896", "#9467bd", "#c5b0d5",
+                    "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f",
+                    "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5", "#1f77b4", "#ff9896"  
+                ];
+
+                const colorScale = d3.scaleOrdinal(categorical).domain(caretakers);
+
+                // create a radius scale based on height
+                const radiusExtent = d3.extent(dataset, d => d['DBH'])
+                const radiusScale = d3.scaleLinear().domain(radiusExtent).range([1,7]);
+
+                viewport.selectAll("circle").data(dataset)
+                .join("circle")
+                .attr("class", "point")
+                .attr("cx", d => projection([d['Longitude'], d['Latitude']])[0])
+                .attr("cy", d=> projection([d['Longitude'], d['Latitude']])[1])
+                .attr("r", d => radiusScale(d['DBH']))
+                .style("fill", function (d){
+                    if (color != null){
+                        return color
+                    }
+                    else{
+                        return colorScale(d['qCaretaker'])
+                    }
+                })
+                .style("opacity", 0.7)
+
+                //draw legend
+                var col = 0;
+                if (color === null){
+                    chart.selectAll("dots").data(names)
+                    .join("circle")
+                    .attr("cx", function(d, i) { 
+                        if (i < 5) {
+                            return 0; // First row
+                        } else if (i < 10) {
+                            return 75; // Second row
+                        } else if (i < 15) {
+                            return 195; // Third row
+                        } else if (i<20){
+                            return 315; // Fourth row
+                        } else{
+                            return 435;
+                        }
+                    })
+                    .attr("cy", function(d, i){
+                        if (i===0 || i===5 ||i===10||i===15||i===20){
+                            return 0
+                        } else if (i===1||i===6||i===11||i===16||i===21){
+                            return 25
+                        } else if(i===2||i===7||i===12||i===17||i===22){
+                            return 50
+                        }else if (i===3||i===8||i===13||i===18){
+                            return 75
+                        }else if (i===4||i===9||i===14||i===19){
+                            return 100
+                        }
+                    })
+                    .attr("r", 7)
+                    .style("fill", d => colorScale(d))
+
+                    chart.selectAll("labels").data(names)
+                    .join("text")
+                    .attr("x", function(d, i) { 
+                        if (i < 5) {
+                            return 20; // First row
+                        } else if (i < 10) {
+                            return 95; // Second row
+                        } else if (i < 15) {
+                            return 215; // Third row
+                        } else if (i<20){
+                            return 335; // Fourth row
+                        } else{
+                            return 455;
+                        }
+                    })
+                    .attr("y", function(d, i){
+                        if (i===0 || i===5 ||i===10||i===15||i===20){
+                            return 0
+                        } else if (i===1||i===6||i===11||i===16||i===21){
+                            return 25
+                        } else if(i===2||i===7||i===12||i===17||i===22){
+                            return 50
+                        }else if (i===3||i===8||i===13||i===18){
+                            return 75
+                        }else if (i===4||i===9||i===14||i===19){
+                            return 100
+                        }
+                    })
+                    .text(function(d){ return d})
+                    .attr("text-anchor", "left")
+                    .style("alignment-baseline", "middle")
+                    .style("font-size", "8px")
+                }
+            }
+
+            drawMap(map, mapWidth, mapHeight, data, result)
+            drawMap(map2, mapWidth2, mapHeight2, reduceData, reduced)
+            drawMap(mapPrivate,mapWidth2, mapHeight2, privateData, ["Private"], color = "#66c2a5")
+            drawMap(mapDpw, mapWidth2, mapHeight2,dpwData, ["DPW"], color = "#fc8d62");
+
+
+            //SPECIES
+            //getting unique list of species
+            careArray = ["Private", "DPW", "SFUSD", "Port", "Rec/Park"]
+
+            let speciesList = [];
+            let cont=false;
+            data.forEach((d,i)=>{
+                if (speciesList.includes(d['qSpecies'])){
+                    start = true;
+                }
+                else{
+                    speciesList.push(d["qSpecies"])
+                }
+                cont = false
+            })
+            console.log(speciesList);
+
+            //creating dictionary of species
+            let specDict = {};
+            for (let i=0; i<speciesList.length; i++){
+                specDict[speciesList[i]]=0;
+            }
+            console.log(specDict)
+            data.forEach((d,i)=>{
+                specDict[d['qSpecies']] ++;
+            });
+            console.log(specDict);
+
+            //chosing top 10 most popular species 
+            var items = Object.keys(specDict).map(function(key){
+                return [key, specDict[key]];
+            });
+
+            items.sort(function(first, second){
+                return second[1]-first[1];
+            });
+            
+            top10 = items.slice(0,10)
+            console.log(top10)
+
+            let speciesArray =[];
+            for(let i=0; i<top10.length;i++){
+                speciesArray.push(top10[i][0])
+            }
+            console.log(speciesArray)
+
+            //filter out for only the 10 species
+            specData = data.filter((d)=> {
+                    return speciesArray.indexOf(d['qSpecies']) > -1 && careArray.indexOf(d['qCaretaker']) >-1
+                });
+            
+            console.log(specData)
+
+            //get only species common name
+            specData.forEach((d,i) => {
+                    d['qSpecies'] = d['qSpecies'].replace(/^.+:: /,"")
+                })
+            console.log(specData)
+
+            //get array for common name
+            for (let i=0; i < speciesArray.length; i++){
+                speciesArray[i]=speciesArray[i].replace(/^.+:: /,"");
+            }
+
+            //group by species and caretaker and get the average  dbh
+            const groups = {};
+            specData.forEach(item => {
+                const species = item.qSpecies;
+                const caretaker = item.qCaretaker
+                const key = `${species}-${caretaker}`;
+
+                if (!groups[key]){
+                    groups[key] = { sumDBH: 0, count: 0, species, caretaker };
+                }
+
+                groups[key].sumDBH += item.DBH;
+                groups[key].count++
+            });
+            
+            const res= {};
+
+            for (const key in groups){
+                const { sumDBH, count } = groups[key];
+                const [species, caretaker] = key.split('-');
+                const averageDBH = sumDBH / count;
+                res[key] = { qSpecies: species, qCaretaker: caretaker, averageDBH };
+            }
+
+            console.log(res);      
+    
+
+            //create scales
+            let specScale = d3.scaleBand().domain(speciesArray).range([0, chartWidth])
+            let careScale = d3.scaleBand().domain(careArray).range([chartHeight, 0])
+
+            let leftAxis = d3.axisLeft(careScale)
+                svgBalloon.append('g')
+                    .attr('class', 'y axis')
+                    .attr('transform',`translate(${margins.left-10},${margins.top})`)
+                    .style("font-family", 'Trebuchet MS')
+                    .call(leftAxis);
+                    
+            let bottomAxis = d3.axisBottom(specScale)
+            svgBalloon.append('g')
+                .attr('class', 'x axis')
+                .attr('transform',`translate(${margins.left},${chartHeight+margins.top+10})`)
+                .style("font-family", 'Trebuchet MS')
+                .call(bottomAxis);
+
+            let leftGridlines = d3.axisLeft(careScale)
+                                    .tickSize(-chartWidth-10)
+                                    .tickFormat('')
+                                    .ticks(6);
+            svgBalloon.append('g')
+                .attr('class', 'y gridlines')
+                .attr('transform',`translate(${margins.left-10},${margins.top})`)
+                .call(leftGridlines);
+
+            let bottomGridlines = d3.axisBottom(specScale)
+                                    .tickSize(-chartHeight-10)
+                                    .tickFormat('')
+                                    .ticks(10);
+            svgBalloon.append('g')
+                .attr('class', 'x gridlines')
+                .attr('transform',`translate(${margins.left},${chartHeight+margins.top+10})`)
+                .call(bottomGridlines);
+            
+            svgBalloon.selectAll('.x.axis text')
+                .attr('transform', `translate(-10, 10) rotate(-25)`)
+                .style('text-anchor', 'end');
+
+            //draw circles
+            let avgRadiusExtent = d3.extent(Object.values(res), d => d.averageDBH);
+            console.log(avgRadiusExtent)
+
+            //d3.interpolateBuGn
+            const colorCode = ["#f7fcfd","#f6fcfd","#f6fcfd","#f5fbfd","#f5fbfc","#f4fbfc","#f4fbfc","#f3fafc","#f2fafc","#f2fafc","#f1fafc","#f1fafc","#f0f9fb","#f0f9fb","#eff9fb","#eef9fb","#eef8fb","#edf8fa","#edf8fa","#ecf8fa","#ebf8fa","#ebf7fa","#eaf7f9","#eaf7f9","#e9f7f9","#e8f6f9","#e8f6f8","#e7f6f8","#e6f6f8","#e6f5f7","#e5f5f7","#e4f5f7","#e4f5f6","#e3f4f6","#e2f4f6","#e2f4f5","#e1f4f5","#e0f3f4","#e0f3f4","#dff3f4","#def3f3","#ddf2f3","#ddf2f2","#dcf2f2","#dbf1f1","#daf1f1","#d9f1f0","#d9f0ef","#d8f0ef","#d7f0ee","#d6f0ee","#d5efed","#d4efec","#d3eeec","#d2eeeb","#d1eeeb","#d0edea","#cfede9","#ceede8","#cdece8","#ccece7","#cbebe6","#caebe6","#c9ebe5","#c7eae4","#c6eae3","#c5e9e3","#c4e9e2","#c2e8e1","#c1e8e0","#c0e7df","#bee7df","#bde6de","#bce6dd","#bae5dc","#b9e4db","#b7e4da","#b6e3da","#b4e3d9","#b3e2d8","#b1e2d7","#b0e1d6","#aee0d5","#ade0d4","#abdfd3","#aadfd2","#a8ded1","#a7ddd0","#a5ddcf","#a4dcce","#a2dbcd","#a0dbcc","#9fdacb","#9dd9ca","#9cd9c9","#9ad8c8","#98d7c7","#97d7c6","#95d6c5","#94d5c4","#92d5c3","#90d4c2","#8fd3c1","#8dd3c0","#8cd2bf","#8ad1be","#88d1bc","#87d0bb","#85cfba","#84cfb9","#82ceb8","#81cdb7","#7fcdb6","#7eccb4","#7ccbb3","#7bcbb2","#79cab1","#78c9b0","#76c9ae","#75c8ad","#73c7ac","#72c7ab","#70c6aa","#6fc5a8","#6dc5a7","#6cc4a6","#6ac3a4","#69c3a3","#68c2a2","#66c1a1","#65c19f","#64c09e","#62bf9d","#61bf9b","#60be9a","#5ebd98","#5dbd97","#5cbc96","#5bbb94","#59bb93","#58ba92","#57b990","#56b98f","#54b88d","#53b78c","#52b78b","#51b689","#50b588","#4fb486","#4db485","#4cb383","#4bb282","#4ab180","#49b17f","#48b07d","#47af7c","#46ae7b","#45ae79","#44ad78","#43ac76","#42ab75","#40aa73","#3fa972","#3ea870","#3da76f","#3ca66d","#3ba56c","#3aa56a","#39a469","#38a367","#37a266","#36a164","#35a063","#349f61","#339e60","#329d5e","#319c5d","#309b5c","#2f9a5a","#2e9959","#2d9757","#2c9656","#2b9555","#2a9453","#299352","#289251","#27914f","#26904e","#258f4d","#248e4c","#238d4a","#228c49","#218b48","#208a47","#1f8946","#1e8845","#1d8744","#1c8643","#1b8542","#1a8441","#198340","#18823f","#17813e","#16803d","#157f3c","#147e3b","#137d3a","#127c39","#117b38","#107a38","#107937","#0f7836","#0e7735","#0d7634","#0c7534","#0b7433","#0b7332","#0a7232","#097131","#087030","#086f2f","#076e2f","#066c2e","#066b2d","#056a2d","#05692c","#04682b","#04672b","#04662a","#03642a","#036329","#026228","#026128","#026027","#025e27","#015d26","#015c25","#015b25","#015a24","#015824","#015723","#005623","#005522","#005321","#005221","#005120","#005020","#004e1f","#004d1f","#004c1e","#004a1e","#00491d","#00481d","#00471c","#00451c","#00441b"];
+            const chop = colorCode.slice(50);
+            
+            let balloonScale = d3.scaleLinear().domain(avgRadiusExtent).range([10,40])
+            let cScale = d3
+                .scaleSequential(d3.interpolateRgbBasis(chop))
+                .domain(avgRadiusExtent);
+
+
+            Object.entries(res).forEach(([key,value], i) => {
+                chartArea
+                .append("circle")
+                .attr("cx", specScale(value.qSpecies)+margins.left-35)
+                .attr("cy", careScale(value.qCaretaker)+margins.top+17)
+                .attr("r", balloonScale(value.averageDBH))
+                .attr("opacity", 1)
+                .style("fill", cScale(value.averageDBH))
+
+                chartArea
+                .append("text")
+                .text(value.averageDBH.toFixed(2))
+                .attr("x", specScale(value.qSpecies)+margins.left-52)
+                .attr("y", careScale(value.qCaretaker) + margins.top + 30 + balloonScale(value.averageDBH))
+            
+            });
+
+
+            chartArea.raise();
+
+            //add legend
+            //recycled from info3300 project 1
+            var gradient = svg.append("linearGradient")
+            .attr("id", "gradient");
+
+            const colors = chop.reverse();
+
+            gradient.attr("x1", "0%")
+                .attr("y1", "0%")
+                .attr("x2", "0%")
+                .attr("y2", "100%");
+
+            gradient.selectAll("stop")
+                .data(colors)
+                .join("stop")
+                .attr("offset", function (d, i) { return i / (colors.length - 1); })
+                .attr("stop-color", d => d);
+
+            svgBalloon
+                .append("rect")
+                .attr("x", 790)
+                .attr("y", height / 2-250)
+                .attr("width", 15)
+                .attr("height", 200)
+                .attr("class", "legend")
+                .style("fill", "url(#gradient)");
+
+                svgBalloon.append("text")
+                .text("high")
+                .attr("x", 770)
+                .attr("y", (height / 2 - 250) - 10)
+                .attr("text-anchor", "left")
+                .style("alignment-baseline", "middle")
+                .style("font-family", 'Trebuchet MS');
+
+                svgBalloon.append("text")
+                .text("low")
+                .attr("x", 780)
+                .attr("y", (height / 2 - 250) + 210)
+                .attr("text-anchor", "left")
+                .style("alignment-baseline", "middle")
+                .style("font-family", 'Trebuchet MS');
+
+        }
+        requestData();
+    </script>
+</body>
+</html>
